@@ -68,6 +68,7 @@ import Queue
 import sys
 import logging
 import StringIO
+import subprocess
 
 try:
     import PythonMagick
@@ -894,6 +895,15 @@ def main():
     if (sys.platform.startswith('linux') or sys.platform.startswith('freebsd')) and FORMAT == "GIF" and not HasMagick:
         sys.exit("GIF format is not supported on this platform. Exiting.")
 
+    # run traffic through sslstrip as a quick workaround for getting SSL webpages to work
+    # NOTE: modern browsers are doing their best to stop this kind of 'attack'. Firefox 
+    # supports an about:config flag test.currentTimeOffsetSeconds(int) = 12000000, which 
+    # you can use to circumvent those checks.
+    try:
+        subprocess.check_output(["pidof", "sslstrip"])
+    except:
+        subprocess.Popen(["sslstrip"], stdout=open(os.devnull,'w'), stderr=subprocess.STDOUT) # runs on port 10000 by default
+    QNetworkProxy.setApplicationProxy(QNetworkProxy(QNetworkProxy.HttpProxy, "localhost", 10000))
     # Launch Proxy Thread
     threading.Thread(target=run_proxy).start()
 
