@@ -283,11 +283,11 @@ if sys.platform.startswith('linux') or sys.platform.startswith('freebsd'):
                 action = str(x.attribute('action'))
                 # since we serve the form not from the original domain we need
                 # to transform it into an absolute URL.
-                action = urlparse.urljoin (web_url, action)
+                action = urlparse.urljoin (str(web_url), action)
                 x.setAttribute("action", action)
 
                 rnd = random.randrange(0, 1000)
-                formdata = base64.urlsafe_b64encode(str(x.toOuterXml()).encode('utf-8', errors='ignore'))
+                formdata = base64.urlsafe_b64encode(str(x.toOuterXml().toUtf8()).encode('zlib'))
                 turl = "http://wrp-{}.form/{}".format(rnd, formdata)
                 httpout.write("<AREA SHAPE=\"RECT\""
                     " COORDS=\"%i,%i,%i,%i\""
@@ -810,7 +810,7 @@ class Proxy(SimpleHTTPServer.SimpleHTTPRequestHandler):
             self.end_headers()
 
         elif form_re:
-            form = base64.urlsafe_b64decode(form_re.group(2))
+            form = base64.urlsafe_b64decode(form_re.group(2)).decode('zlib')
             httpout.write("<HTML><BODY>{}</BODY></HTML>".format(form))
 
         # Process ISMAP Request
@@ -921,7 +921,9 @@ def main():
     # NOTE: modern browsers are doing their best to stop this kind of 'attack'. Firefox 
     # supports an about:config flag test.currentTimeOffsetSeconds(int) = 12000000, which 
     # you can use to circumvent those checks.
-    if not subprocess.check_output(["pidof", "sslstrip"]):
+    try:
+        subprocess.check_output(["pidof", "sslstrip"])
+    except:
         subprocess.Popen(["sslstrip"], stdout=open(os.devnull,'w'), stderr=subprocess.STDOUT) # runs on port 10000 by default
     QNetworkProxy.setApplicationProxy(QNetworkProxy(QNetworkProxy.HttpProxy, "localhost", 10000))
     # Launch Proxy Thread
