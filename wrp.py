@@ -69,6 +69,8 @@ import sys
 import logging
 import StringIO
 import subprocess
+import base64
+import urlparse
 
 try:
     import PythonMagick
@@ -276,6 +278,21 @@ if sys.platform.startswith('linux') or sys.platform.startswith('freebsd'):
                 httpout.write("<IMG SRC=\"http://%s\" ALT=\"wrp-render\" USEMAP=\"#map\">\n"
                               "<MAP NAME=\"map\">\n" % (WebkitRenderer.req_img))
 
+            for x in frame.findAllElements('form'):
+                xmin, ymin, xmax, ymax = x.geometry().getCoords()
+                action = str(x.attribute('action'))
+                # since we serve the form not from the original domain we need
+                # to transform it into an absolute URL.
+                action = urlparse.urljoin (web_url, action)
+                x.setAttribute("action", action)
+
+                rnd = random.randrange(0, 1000)
+                formdata = base64.urlsafe_b64encode(str(x.toOuterXml()).encode('utf-8', errors='ignore'))
+                turl = "http://wrp-{}.form/{}".format(rnd, formdata)
+                httpout.write("<AREA SHAPE=\"RECT\""
+                    " COORDS=\"%i,%i,%i,%i\""
+                    " ALT=\"%s\" HREF=\"%s\">\n".decode('utf-8', errors='ignore')
+                    % (xmin, ymin, xmax, ymax, "form element", turl))
             for x in frame.findAllElements('a'):
                 turl = QUrl(web_url).resolved(QUrl(x.attribute('href'))).toString()
                 xmin, ymin, xmax, ymax = x.geometry().getCoords()
@@ -743,6 +760,7 @@ class Proxy(SimpleHTTPServer.SimpleHTTPRequestHandler):
         httpout = self.wfile
 
         map_re = re.match(r"http://(wrp-\d+\.map).*?(\d+),(\d+)", req_url)
+        form_re= re.match(r"http://(wrp-\d+.form)/(.*)$", req_url)
         wid_re = re.match(r"http://(width-[0-9]+-px\.jpg).*", req_url)
         gif_re = re.match(r"http://(wrp-\d+\.gif).*", req_url)
         jpg_re = re.match(r"http://(wrp-\d+\.jpg).*", req_url)
@@ -790,6 +808,10 @@ class Proxy(SimpleHTTPServer.SimpleHTTPRequestHandler):
 
             self.send_error(404, "Width request")
             self.end_headers()
+
+        elif form_re:
+            form = base64.urlsafe_b64decode(form_re.group(2))
+            httpout.write("<HTML><BODY>{}</BODY></HTML>".format(form))
 
         # Process ISMAP Request
         elif map_re:
